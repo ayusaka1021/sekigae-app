@@ -1,0 +1,146 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>席替えアプリ</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>席替えアプリ</h1>
+    <p>出席番号と性別を入力して、席番号を引いてください。</p>
+
+    <label for="studentNumber">出席番号:</label>
+    <input type="number" id="studentNumber" name="studentNumber" min="1" max="40" required>
+
+    <p>性別:</p>
+    <input type="radio" id="male" name="gender" value="male">
+    <label for="male">男性</label>
+    <input type="radio" id="female" name="gender" value="female">
+    <label for="female">女性</label>
+
+    <button id="drawButton">席を引く</button>
+    <div id="result" style="margin-top: 20px; font-size: 30px; font-weight: bold;"></div>
+
+    <h2>座席番号と出席番号の表</h2>
+    <table id="seatTable" border="1" style="width: 80%; margin: auto; text-align: center; font-size: 24px;">
+        <thead>
+            <tr><th>出席番号</th><th>席番号</th></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <!-- Firebase SDKをCDNリンクで読み込む -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-database.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyD3q-Q92fDYujKCn5mb6SfoUkSYDfmCNXo",
+            authDomain: "sekigae-7f9d7.firebaseapp.com",
+            databaseURL: "https://sekigae-7f9d7-default-rtdb.firebaseio.com",
+            projectId: "sekigae-7f9d7",
+            storageBucket: "sekigae-7f9d7.appspot.com",
+            messagingSenderId: "627572777326",
+            appId: "1:627572777326:web:f9a90c824d0b9f4b4b217f"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        const maleSeats = Array.from({length: 22}, (_, i) => `M${i + 1}`);
+        const femaleSeats = Array.from({length: 18}, (_, i) => `F${i + 1}`);
+        let assignedSeats = {};
+        const totalStudents = 40;
+
+        // Explicitly add event listener for the button click
+        document.getElementById("drawButton").addEventListener("click", drawSeat);
+
+        function drawSeat() {
+            console.log("drawSeat function is called."); // Debugging log
+            const studentNumber = document.getElementById('studentNumber').value;
+            const gender = getGenderSelection();
+
+            if (!studentNumber || !gender) {
+                alert('出席番号と性別を入力してください');
+                return;
+            }
+
+            // Check if the seat is already assigned
+            if (assignedSeats[studentNumber]) {
+                alert('この出席番号ではすでに席を引いています');
+                return;
+            }
+
+            const seatPosition = assignSeat(gender);
+            console.log(`Assigned seat: ${seatPosition}`); // Debugging log
+
+            assignedSeats[studentNumber] = { gender, seatPosition };
+
+            // Save result to Firebase
+            set(ref(database, 'seats/' + studentNumber), {
+                studentNumber: studentNumber,
+                seatPosition: seatPosition,
+                gender: gender
+            }).then(() => {
+                console.log("Seat assignment saved to Firebase."); // Debugging log
+            }).catch((error) => {
+                console.error("Error saving to Firebase:", error); // Debugging log
+            });
+
+            document.getElementById('result').textContent = `あなたの席は ${seatPosition} です`;
+
+            updateSeatTable();
+        }
+
+        function assignSeat(gender) {
+            let availableSeats;
+            if (gender === 'male') {
+                availableSeats = maleSeats;
+            } else if (gender === 'female') {
+                availableSeats = femaleSeats;
+            }
+            const randomIndex = Math.floor(Math.random() * availableSeats.length);
+            return availableSeats.splice(randomIndex, 1)[0]; // 割り当てられた席を返す
+        }
+
+        function getGenderSelection() {
+            const male = document.getElementById('male').checked;
+            const female = document.getElementById('female').checked;
+
+            if (male) return 'male';
+            if (female) return 'female';
+            return null;
+        }
+
+        function updateSeatTable() {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = ''; // テーブルの内容をクリア
+
+            // Firebaseからリアルタイムでデータを取得し、テーブルを更新
+            onValue(ref(database, 'seats'), (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    assignedSeats = data;
+                    Object.keys(data).forEach((key) => {
+                        const row = document.createElement('tr');
+                        const studentCell = document.createElement('td');
+                        const seatCell = document.createElement('td');
+
+                        studentCell.textContent = data[key].studentNumber;
+                        seatCell.textContent = data[key].seatPosition;
+
+                        row.appendChild(studentCell);
+                        row.appendChild(seatCell);
+                        tableBody.appendChild(row);
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html>
